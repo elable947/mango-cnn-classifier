@@ -1,11 +1,30 @@
 # Guía de Desarrollo — Proyecto Clasificación de Mangos con CNN
 
+> **Para agentes IA (opencode, Claude Code, etc.):** Leé esta guía completa antes de actuar. Cada fase describe quién, qué archivos y qué entregables. Usá `uv run` para comandos Python y `uv add` para dependencias. Los notebooks son `.py` de marimo, no `.ipynb`.
+
+## Estado actual
+
+| Fase | Estado | Rama |
+|------|--------|------|
+| 0 — Setup | ✅ Completado | main, develop |
+| 1 — EDA | 🔴 Pendiente | ds/eda |
+| 2 — Preprocesamiento | 🔴 Pendiente | ds/preprocessing |
+| 3 — CNN propia | 🔴 Pendiente | ds/cnn-propia |
+| 4 — Transfer Learning | 🔴 Pendiente | ds/transfer-learning |
+| 5 — Evaluación | 🔴 Pendiente | ds/evaluacion |
+| 6 — API + Despliegue | 🔴 Pendiente | be/api, be/docker |
+| 7 — Frontend + QA | 🔴 Pendiente | fe/frontend, fe/qa |
+
+> **Fase actual: 1 — EDA**. El DS debe crear la rama `ds/eda` desde `develop` y ejecutar los pasos de la Fase 1.
+
+---
+
 ## Tecnologías base
 
 | Herramienta | Versión / Detalle |
 |---|---|
 | Python | 3.10.4 (gestionado con `uv`) |
-| uv | Inicializar con `uv init --python 3.10.4` |
+| uv | Instalar deps con `uv sync` |
 | Git + GitHub | Trabajo por ramas, Pull Requests |
 | Polars | DataFrames (en vez de pandas) |
 | Marimo | Notebooks reactivos (en vez de Jupyter) |
@@ -54,20 +73,20 @@ main ──── integración final, solo merge via PR
 5. Al final de cada fase → PR de `develop` a `main` (revisión grupal).
 6. Commits en español o inglés, descriptivos: `git commit -m "eda: consolidate 10 folders into 5 types"`.
 
-### Setup inicial del repo
+### Setup inicial del repo (ya ejecutado, solo referencia)
 
 ```bash
-# 1. Clonar (o ya estamos en la carpeta)
-cd D:\Projects\mangow
+# 1. Clonar
+git clone https://github.com/elable947/mango-cnn-classifier.git
+cd mango-cnn-classifier
 
-# 2. Inicializar con uv (Python 3.10.4)
-uv init --python 3.10.4
+# 2. Instalar dependencias
+uv sync
 
-# 3. Crear rama develop y subir
-git checkout -b develop
-git push -u origin develop
+# 3. Cambiar a develop
+git checkout develop
 
-# 4. Cada integrante clona y crea su primera rama
+# 4. Crear rama de trabajo (según rol)
 git checkout -b ds/eda        # Data Scientist
 git checkout -b be/api        # Backend
 git checkout -b fe/frontend   # Frontend
@@ -295,9 +314,128 @@ marimo run notebooks/01_eda.py
 
 ## Referencia: proyecto COVID de ejemplo (`ejemplo_api/`)
 
-El profesor proporcionó un proyecto completo de clasificación de radiografías (COVID vs Normal vs Neumonía) como guía. Está en `ejemplo_api/` (**no se sube a Git** por su peso, ~336 MB).
+El profesor proporcionó un proyecto completo de clasificación de radiografías (COVID vs Normal vs Neumonía) como guía. **No está en Git** (`.gitignore`), pero el código relevante se reproduce aquí para referencia del agente.
 
-### Lo que podemos reutilizar directamente
+### API_COVID.py (estructura base para nuestra API)
+
+```python
+from flask import Flask, request, jsonify
+import os, numpy as np
+from PIL import Image
+import tensorflow as tf
+
+MODEL_PATH = "modelo_cnn_covid.h5"
+IMG_SIZE = (224, 224)
+possible_labels = ['Covid', 'Normal', 'Viral Pneumonia']
+
+app = Flask(__name__)
+model = tf.keras.models.load_model(MODEL_PATH)  # carga UNA vez al iniciar
+
+def preparar_imagen(img_path):
+    img = Image.open(img_path).convert("RGB")
+    img = img.resize(IMG_SIZE)
+    img = np.array(img, dtype=np.float32) / 255.0   # normalizar [0,1]
+    img = np.expand_dims(img, axis=0)               # batch dim
+    return img
+
+@app.route("/predict", methods=["POST"])
+def predict():
+    if "image" not in request.files:
+        return jsonify({"error": "No se envió ninguna imagen"}), 400
+    file = request.files["image"]
+    if file.filename == "":
+        return jsonify({"error": "Nombre de archivo vacío"}), 400
+
+    os.makedirs("temp", exist_ok=True)
+    img_path = os.path.join("temp", file.filename)
+    file.save(img_path)
+
+    try:
+        img = preparar_imagen(img_path)
+        pred = model.predict(img)
+        idx = int(np.argmax(pred))
+        resultado = {
+            "clase": possible_labels[idx],
+            "confianza_porcentaje": round(float(pred[0][idx]) * 100, 2),
+            "probabilidades": {
+                possible_labels[i]: round(float(pred[0][i]) * 100, 2)
+                for i in range(len(possible_labels))
+            }
+        }
+        return jsonify(resultado)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        if os.path.exists(img_path):
+            os.remove(img_path)
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5000, debug=True)
+```
+
+### Index.html (estructura base para nuestro frontend)
+
+```html
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Detección de COVID-19</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body>
+  <div class="container">
+    <div class="card p-4">
+      <h3>Cargar radiografía</h3>
+      <input type="file" id="imageUpload" accept=".jpg,.png,.jpeg">
+      <button onclick="performAnalysis()">Analizar Imagen</button>
+      <div id="imagePreview"></div>
+      <div id="analysisResult" style="display:none;">
+        <p id="resultText"></p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+  function performAnalysis() {
+    const input = document.getElementById('imageUpload');
+    if (!input.files.length) { alert("Seleccione una imagen"); return; }
+    const file = input.files[0];
+
+    // Preview
+    const reader = new FileReader();
+    reader.onload = e => {
+      document.getElementById('imagePreview').innerHTML =
+        `<img src="${e.target.result}" style="max-width:100%">`;
+    };
+    reader.readAsDataURL(file);
+
+    // Enviar a la API
+    const formData = new FormData();
+    formData.append("image", file);
+
+    fetch("http://127.0.0.1:5000/predict", { method: "POST", body: formData })
+      .then(res => res.json())
+      .then(data => {
+        const color = data.clase === "Covid" ? "danger" :
+                      data.clase === "Normal" ? "success" : "warning";
+        document.getElementById('resultText').innerHTML = `
+          <span class="badge badge-${color}">${data.clase}</span><br>
+          <strong>Confianza:</strong> ${data.confianza_porcentaje.toFixed(2)}%
+        `;
+        document.getElementById('analysisResult').style.display = "block";
+      })
+      .catch(err => {
+        document.getElementById('resultText').textContent = "Error: " + err;
+        document.getElementById('analysisResult').style.display = "block";
+      });
+  }
+  </script>
+</body>
+</html>
+```
+
+### Lo que aprovechamos del ejemplo
 
 | Componente | Archivo | Qué aprovechar |
 |---|---|---|
