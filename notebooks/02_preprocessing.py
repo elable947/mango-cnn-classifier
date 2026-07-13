@@ -84,6 +84,40 @@ def __(Path, os, shutil, splits_dict):
 
 
 @app.cell
+def __(Path, base_data_dir, os):
+    import hashlib
+    def get_file_hash(filepath):
+        hasher = hashlib.md5()
+        try:
+            with open(filepath, 'rb') as f:
+                buf = f.read()
+                hasher.update(buf)
+            return hasher.hexdigest()
+        except Exception:
+            return None
+
+    print("\nRealizando auditoría de Data Leakage...")
+    seen_hashes = {}
+    duplicates = 0
+    for split in ["train", "val", "test"]:
+        split_dir_audit = base_data_dir / split
+        if not split_dir_audit.exists(): continue
+        for root, _, files in os.walk(split_dir_audit):
+            for filename in files:
+                filepath = Path(root) / filename
+                if filepath.suffix.lower() not in {'.jpg', '.jpeg', '.png', '.bmp'}: continue
+                f_hash = get_file_hash(filepath)
+                if not f_hash: continue
+                if f_hash in seen_hashes:
+                    os.remove(filepath)
+                    duplicates += 1
+                else:
+                    seen_hashes[f_hash] = filepath
+    print(f"Auditoría completada. Fugas detectadas y eliminadas: {duplicates}")
+    return duplicates, get_file_hash, seen_hashes, split_dir_audit
+
+
+@app.cell
 def __(IMG_SIZE, ImageDataGenerator):
     # 2.3 Resize y normalización [0,1]
     # 2.5 Data Augmentation

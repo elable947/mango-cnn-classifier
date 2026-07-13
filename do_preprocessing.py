@@ -46,3 +46,33 @@ for split_name in ["train", "val", "test"]:
         dest_dir.mkdir(parents=True, exist_ok=True)
         shutil.copy2(item["path"], dest_dir / Path(item["path"]).name)
 print("Imágenes distribuidas en carpetas train/, val/, test/.")
+
+import hashlib
+def get_file_hash(filepath):
+    hasher = hashlib.md5()
+    try:
+        with open(filepath, 'rb') as f:
+            buf = f.read()
+            hasher.update(buf)
+        return hasher.hexdigest()
+    except Exception:
+        return None
+
+print("\nRealizando auditoría de Data Leakage...")
+seen_hashes = {}
+duplicates = 0
+for split in ["train", "val", "test"]:
+    split_dir = base_data_dir / split
+    if not split_dir.exists(): continue
+    for root, _, files in os.walk(split_dir):
+        for filename in files:
+            filepath = Path(root) / filename
+            if filepath.suffix.lower() not in {'.jpg', '.jpeg', '.png', '.bmp'}: continue
+            f_hash = get_file_hash(filepath)
+            if not f_hash: continue
+            if f_hash in seen_hashes:
+                os.remove(filepath)
+                duplicates += 1
+            else:
+                seen_hashes[f_hash] = filepath
+print(f"Auditoría completada. Fugas detectadas y eliminadas: {duplicates}")
