@@ -1,0 +1,422 @@
+\documentclass[aspectratio=169]{beamer}
+\usepackage[utf8]{inputenc}
+\usepackage[spanish]{babel}
+\usepackage{graphicx}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{tikz}
+
+% Tema limpio y profesional
+\usetheme{Madrid}
+\usecolortheme{whale}
+\setbeamertemplate{navigation symbols}{}
+
+% Colores personalizados
+\definecolor{mango}{RGB}{255, 140, 0}
+\definecolor{verde}{RGB}{40, 167, 69}
+\definecolor{rojo}{RGB}{220, 53, 69}
+\definecolor{codigobg}{RGB}{248, 248, 248}
+
+% Estilo para código
+\lstset{
+  basicstyle=\ttfamily\small,
+  backgroundcolor=\color{codigobg},
+  frame=single,
+  framerule=0.5pt,
+  rulecolor=\color{gray!30},
+  breaklines=true,
+  showstringspaces=false,
+  aboveskip=8pt,
+  belowskip=8pt,
+  xleftmargin=8pt,
+  xrightmargin=8pt
+}
+
+\title[Clasificador de Mangos con CNN]{Clasificador de Mangos con CNN \\ API, Docker \& Frontend}
+\subtitle{Fases 6 y 7 — Backend + Frontend + QA}
+\author{Abel Watt}
+\institute{Proyecto de Aprendizaje Automático}
+\date{\today}
+
+\begin{document}
+
+% ==================== PORTADA ====================
+\begin{frame}
+  \titlepage
+\end{frame}
+
+% ==================== ÍNDICE ====================
+\begin{frame}{Contenido}
+  \tableofcontents
+\end{frame}
+
+% ==================== SECCIÓN 1 ====================
+\section{Resumen del Proyecto}
+
+\begin{frame}{El problema}
+  \begin{columns}
+    \column{0.5\textwidth}
+    \textbf{Objetivo:} Clasificar mangos en 5 tipos y determinar si son exportables.
+
+    \vspace{1em}
+    \textbf{Clases:}
+    \begin{itemize}
+      \item Tipo 1 — 100\% exportable
+      \item Tipo 2 — 80\% exportable
+      \item Tipo 3 — 60\% exportable
+      \item Tipo 4 — 40\% NO exportable
+      \item Tipo 5 — 20\% NO exportable
+    \end{itemize}
+
+    \column{0.5\textwidth}
+    \textbf{Mis roles:}
+    \begin{itemize}
+      \item \textbf{Fase 6:} Backend / DevOps (API + Docker)
+      \item \textbf{Fase 7:} Frontend / QA (Interfaz + pruebas)
+    \end{itemize}
+
+    \vspace{1em}
+    \textbf{Tecnologías:}
+    \begin{itemize}
+      \item Flask + TensorFlow (backend)
+      \item Docker + Gunicorn (despliegue)
+      \item HTML5 + Bootstrap + JS (frontend)
+      \item ResNet50 Transfer Learning (modelo)
+    \end{itemize}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Arquitectura del sistema}
+  \centering
+  \begin{tikzpicture}[node distance=2cm, auto]
+    \node[draw, rounded corners, fill=orange!20] (user) {Usuario (navegador)};
+    \node[draw, rounded corners, fill=blue!20, right=of user] (flask) {Flask API\\0.0.0.0:5000};
+    \node[draw, rounded corners, fill=green!20, right=of flask] (tf) {TensorFlow\\ResNet50};
+    \node[draw, rounded corners, fill=gray!20, below=of flask] (docker) {Docker\\Container};
+
+    \draw[->] (user) -- node[above] {HTTP} (flask);
+    \draw[->] (flask) -- node[above] {model.predict()} (tf);
+    \draw[->] (tf) -- node[below] {JSON} (flask);
+    \draw[->] (flask) -- node[below] {JSON} (user);
+    \draw[dashed] (docker) -- (flask);
+  \end{tikzpicture}
+
+  \vspace{1em}
+  \begin{center}
+    \small\textbf{3 endpoints:} \texttt{GET /} $\cdot$ \texttt{POST /predict} $\cdot$ \texttt{GET /health}
+  \end{center}
+\end{frame}
+
+% ==================== SECCIÓN 2 ====================
+\section{Backend — Fase 6}
+
+\begin{frame}{API Flask — api/app.py}
+  \textbf{Decisiones de diseño:}
+  \begin{itemize}
+    \item Modelo cargado \textbf{una vez} al iniciar (no por request)
+    \item Preprocesamiento automático según modelo (ResNet vs CNN propia)
+    \item Sin archivos temporales en disco (procesamiento en memoria)
+    \item Siguiendo el ejemplo \texttt{API\_COVID.py} del profesor
+  \end{itemize}
+
+  \vspace{0.5em}
+  \textbf{Estructura del código:}
+  \begin{enumerate}
+    \item Configuración (\texttt{MODEL\_NAME}, clases, mapa exportable)
+    \item Carga del modelo (\texttt{tf.keras.models.load\_model})
+    \item \texttt{preparar\_imagen()} — preprocesamiento 224×224
+    \item \texttt{inferir()} — predicción + formateo
+    \item Endpoints Flask
+  \end{enumerate}
+\end{frame}
+
+\begin{frame}[fragile]{Endpoint POST /predict}
+  \begin{lstlisting}[language=Python]
+@app.route("/predict", methods=["POST"])
+def predict():
+    if "image" not in request.files:
+        return jsonify({"error": "..."}), 400
+    file = request.files["image"]
+    # Validar extensión, preprocesar, predecir...
+    img_array = preparar_imagen(file)   # 224x224, normalizar
+    resultado = inferir(img_array)      # model.predict()
+    return jsonify(resultado)           # {tipo, exportable, probabilidad}
+  \end{lstlisting}
+
+  \vspace{0.5em}
+  \textbf{Respuesta:}
+  \begin{lstlisting}[language=JavaScript]
+{"tipo": "Tipo_4", "exportable": false, "probabilidad": 94.47}
+  \end{lstlisting}
+\end{frame}
+
+\begin{frame}{Manejo de errores}
+  \centering
+  \begin{tabular}{|c|c|l|}
+    \hline
+    \textbf{Caso} & \textbf{HTTP} & \textbf{Mensaje} \\
+    \hline
+    Sin imagen & 400 & \texttt{"No se envió ninguna imagen"} \\
+    Nombre vacío & 400 & \texttt{"Nombre de archivo vacío"} \\
+    Formato inválido & 400 & \texttt{"Formato no soportado: .txt"} \\
+    Imagen corrupta & 500 & \texttt{"Error en la inferencia: ..."} \\
+    Error interno & 500 & \texttt{"Error en la inferencia: ..."} \\
+    \hline
+  \end{tabular}
+
+  \vspace{1em}
+  Todos los errores se capturan con \texttt{try/except} y devuelven JSON estructurado.
+\end{frame}
+
+% ==================== SECCIÓN 3 ====================
+\section{Docker — Despliegue}
+
+\begin{frame}{Dockerfile}
+  \begin{lstlisting}[language=Docker]
+FROM python:3.10.4-slim
+WORKDIR /app
+RUN apt-get install -y libgl1-mesa-glx libglib2.0-0
+
+COPY api/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+COPY api/app.py api/
+COPY frontend/ frontend/
+COPY models/ models/
+
+ENV TF_ENABLE_ONEDNN_OPTS=0
+EXPOSE 5000
+CMD ["gunicorn", "--bind", "0.0.0.0:5000",
+     "--workers", "1", "--timeout", "600",
+     "--max-requests", "1",
+     "api.app:app"]
+  \end{lstlisting}
+\end{frame}
+
+\begin{frame}{¿Por qué Gunicorn?}
+  \begin{columns}
+    \column{0.5\textwidth}
+    \textbf{Flask dev server:}
+    \begin{itemize}
+      \item No es para producción
+      \item Un solo hilo
+      \item Sin manejo de timeout
+      \item Advertencia explícita de Flask
+    \end{itemize}
+
+    \column{0.5\textwidth}
+    \textbf{Gunicorn:}
+    \begin{itemize}
+      \item Servidor WSGI probado
+      \item Workers gestionados
+      \item Timeout configurable
+      \item Reciclaje de workers
+    \end{itemize}
+  \end{columns}
+
+  \vspace{1em}
+  \textbf{Conflictos resueltos Gunicorn + TensorFlow en CPU:}
+
+  \begin{tabular}{|c|c|}
+    \hline
+    \textbf{Problema} & \textbf{Solución} \\
+    \hline
+    oneDNN + fork & \texttt{TF\_ENABLE\_ONEDNN\_OPTS=0} \\
+    Worker timeout & \texttt{--timeout 600} \\
+    Memory leak & \texttt{--max-requests 1} \\
+    RAM × workers & \texttt{--workers 1} \\
+    \hline
+  \end{tabular}
+\end{frame}
+
+\begin{frame}{Comandos Docker}
+  \centering
+  \begin{tabular}{|l|l|}
+    \hline
+    \textbf{Acción} & \textbf{Comando} \\
+    \hline
+    Build & \texttt{docker build -t mango-api .} \\
+    Iniciar & \texttt{docker run -d -p 5000:5000 --name mango-api mango-api} \\
+    Logs & \texttt{docker logs -f mango-api} \\
+    Detener & \texttt{docker stop mango-api} \\
+    Reiniciar & \texttt{docker restart mango-api} \\
+    Borrar & \texttt{docker rm -f mango-api} \\
+    \hline
+  \end{tabular}
+
+  \vspace{1em}
+  \textbf{Tiempo de carga:} $\sim$90s en CPU (modelo ResNet50 de 165 MB)
+\end{frame}
+
+% ==================== SECCIÓN 4 ====================
+\section{Frontend — Fase 7}
+
+\begin{frame}[fragile]{Frontend HTML5 + Bootstrap + JS Vanilla}
+  \textbf{Tecnologías (según guía):}
+  \begin{itemize}
+    \item HTML5 semántico
+    \item Bootstrap 4.6 (CDN)
+    \item JavaScript vanilla (\texttt{fetch API})
+  \end{itemize}
+
+  \vspace{0.5em}
+  \textbf{Componentes:}
+
+  \begin{tabular}{|c|l|}
+    \hline
+    \textbf{Componente} & \textbf{Implementación} \\
+    \hline
+    Input archivo & \texttt{<input type="file" accept=".jpg,.jpeg,.png,.bmp">} \\
+    Preview & \texttt{FileReader.readAsDataURL()} \\
+    Botón & \texttt{onclick="clasificar()"} \\
+    Loader & Bootstrap spinner (importante: CPU $\sim$60s) \\
+    Resultado & Badge verde/rojo + barra de progreso \% \\
+    Errores & Alertas Bootstrap warning/danger \\
+    \hline
+  \end{tabular}
+\end{frame}
+
+\begin{frame}[fragile]{Flujo del Frontend}
+  \begin{lstlisting}[language=JavaScript]
+function clasificar() {
+  const formData = new FormData();
+  formData.append("image", input.files[0]);
+
+  fetch("/predict", { method: "POST", body: formData })
+    .then(res => res.ok ? res.json() : throwError(res))
+    .then(data => renderResult(data))  // Card con tipo, exportable, %
+    .catch(err => showError(err));
+}
+  \end{lstlisting}
+
+  \vspace{0.5em}
+  \textbf{Ruta relativa} \texttt{"/predict"} — funciona en desarrollo y producción sin cambios.
+\end{frame}
+
+% ==================== SECCIÓN 5 ====================
+\section{Pruebas — QA}
+
+\begin{frame}{Pruebas realizadas}
+  \textbf{Pruebas funcionales (7.7):}
+
+  \begin{tabular}{|l|c|c|}
+    \hline
+    \textbf{Prueba} & \textbf{Esperado} & \textbf{Resultado} \\
+    \hline
+    Imagen Tipo 4 & exportable: false, 94.47\% & \textcolor{verde}{OK} \\
+    Health check & \texttt{\{"status":"ok"\}} & \textcolor{verde}{OK} \\
+    Frontend HTML & HTTP 200 & \textcolor{verde}{OK} \\
+    \hline
+  \end{tabular}
+
+  \vspace{1em}
+  \textbf{Pruebas de borde (7.8):}
+
+  \begin{tabular}{|l|c|c|}
+    \hline
+    \textbf{Prueba} & \textbf{Esperado} & \textbf{Resultado} \\
+    \hline
+    Sin archivo & 400 & \textcolor{verde}{OK} \\
+    Archivo corrupto & 500 & \textcolor{verde}{OK} \\
+    Formato inválido (.txt) & 400 & \textcolor{verde}{OK} \\
+    \hline
+  \end{tabular}
+\end{frame}
+
+% ==================== SECCIÓN 6 ====================
+\section{Red y Conectividad}
+
+\begin{frame}{Problema WSL2 + Tailscale}
+  \textbf{Problema:} WSL2 tiene IP privada interna no accesible desde la red.
+
+  \textbf{Solución — Port Proxy de Windows:}
+  \begin{lstlisting}[language=Bash]
+netsh interface portproxy add v4tov4
+    listenport=5000 listenaddress=0.0.0.0
+    connectport=5000 connectaddress=172.29.130.59
+  \end{lstlisting}
+
+  \vspace{0.5em}
+  \begin{center}
+  \begin{tikzpicture}[node distance=2.5cm]
+    \node[draw, rounded corners] (laptop) {Laptop\\100.x.x.x};
+    \node[draw, rounded corners, right=of laptop] (ts) {Tailscale\\100.82.22.10};
+    \node[draw, rounded corners, right=of ts] (win) {Windows\\portproxy};
+    \node[draw, rounded corners, right=of win] (wsl) {WSL2\\172.29.130.59:5000};
+    \draw[->] (laptop) -- (ts);
+    \draw[->] (ts) -- (win);
+    \draw[->] (win) -- (wsl);
+  \end{tikzpicture}
+  \end{center}
+\end{frame}
+
+% ==================== SECCIÓN 7 ====================
+\section{Demostración}
+
+\begin{frame}{Demo — Resultado real}
+  \centering
+  \textbf{Entrada:} Imagen de mango Tipo 4 (no exportable)
+
+  \vspace{1em}
+  \texttt{curl -X POST -F "image=@mango.jpg" /predict}
+
+  \vspace{1em}
+  \begin{beamercolorbox}[wd=0.7\textwidth,center,rounded=true]{block body}
+    \Large\texttt{\{"tipo": "Tipo\_4",}\\
+    \texttt{\ \ "exportable": false,}\\
+    \texttt{\ \ "probabilidad": 94.47\}}
+  \end{beamercolorbox}
+
+  \vspace{1em}
+  \begin{itemize}
+    \item Clasificación correcta: Tipo 4
+    \item Exportable: false (correcto: 40\% no exportable)
+    \item Confianza: 94.47\% (alta certeza)
+  \end{itemize}
+\end{frame}
+
+% ==================== CIERRE ====================
+\section{Conclusión}
+
+\begin{frame}{Entregables completados}
+  \begin{columns}
+    \column{0.5\textwidth}
+    \textbf{Fase 6 — API + Despliegue:}
+    \begin{itemize}
+      \item[\checkmark] \texttt{api/app.py} (3 endpoints)
+      \item[\checkmark] \texttt{Dockerfile} (gunicorn)
+      \item[\checkmark] \texttt{api/requirements.txt}
+      \item[\checkmark] \texttt{docs/despliegue.md}
+    \end{itemize}
+
+    \column{0.5\textwidth}
+    \textbf{Fase 7 — Frontend + QA:}
+    \begin{itemize}
+      \item[\checkmark] \texttt{frontend/index.html}
+      \item[\checkmark] Input + preview + fetch
+      \item[\checkmark] Manejo de errores
+      \item[\checkmark] Pruebas funcionales y de borde
+    \end{itemize}
+  \end{columns}
+
+  \vspace{2em}
+  \begin{center}
+    \Large\textbf{Stack:} Flask + TensorFlow + ResNet50 + Docker + Gunicorn + Bootstrap
+
+    \vspace{1em}
+    \normalsize Repositorio: \url{https://github.com/elable947/mango-cnn-classifier}
+  \end{center}
+\end{frame}
+
+\begin{frame}{¿Preguntas?}
+  \centering
+  \Huge{🥭}
+
+  \vspace{1em}
+  \large Clasificador de Mangos con CNN
+
+  \vspace{0.5em}
+  \normalsize Fases 6 y 7 — Backend + Frontend + QA
+\end{frame}
+
+\end{document}
