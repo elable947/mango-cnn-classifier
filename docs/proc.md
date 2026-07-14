@@ -15,8 +15,9 @@ docker rm -f mango-api 2>/dev/null
 docker build -t mango-api .
 docker run -d -p 5000:5000 --name mango-api mango-api
 
-# 3. Esperar ~90s (carga del modelo en CPU)
+# 3. Esperar ~120s (carga de ambos modelos en CPU)
 curl localhost:5000/health   # Confirmar que responde
+# Respuesta esperada: {"modelos_cargados":["resnet50","cnn_propia"],"status":"ok"}
 
 # 4. Verificar la IP de WSL:
 hostname -I
@@ -55,7 +56,7 @@ docker run -d -p 5000:5000 --name mango-api mango-api
 
 ### 3. Verificar que la API está viva
 
-Esperá ~90 segundos (TensorFlow carga el modelo ResNet50 de 165 MB en CPU) y luego:
+Esperá ~120 segundos (TensorFlow carga ambos modelos: ResNet50 165 MB + CNN Propia 255 MB en CPU) y luego:
 
 ```bash
 # Ver logs en tiempo real (Ctrl+C para salir sin matar el contenedor)
@@ -67,7 +68,7 @@ curl localhost:5000/health
 
 Respuesta esperada:
 ```json
-{"clases":["Tipo_1","Tipo_2","Tipo_3","Tipo_4","Tipo_5"],"modelo":"resnet50_mango","status":"ok"}
+{"clases":["Tipo_1","Tipo_2","Tipo_3","Tipo_4","Tipo_5"],"modelos_cargados":["resnet50","cnn_propia"],"status":"ok"}
 ```
 
 ### 4. Actualizar el portproxy de Windows
@@ -115,8 +116,9 @@ Ejemplo: `http://100.82.22.10:5000`
 Para demostrar que funciona, tené lista una imagen de mango. Desde WSL:
 
 ```bash
-# Tipo 4 (no exportable) — respuesta en ~60s
+# Predice con ambos modelos (~2-3 min en CPU)
 curl -X POST -F "image=@Dataset_mangos/TIPO 4_40__NO EXPORTABLE/20230515_181028.jpg" http://localhost:5000/predict
+# Respuesta: {"resnet50":{...}, "cnn_propia":{...}}
 ```
 
 O subila desde el frontend en el navegador.
@@ -130,7 +132,7 @@ O subila desde el frontend en el navegador.
 | `address already in use` | Puerto 5000 ocupado | `docker rm -f mango-api` y reintentar |
 | `Cannot connect` en el navegador | Portproxy desactualizado o IP de Tailscale cambió | Revisar `tailscale ip -4` y `hostname -I`, actualizar ambos |
 | `WORKER TIMEOUT` en logs | Docker sin RAM suficiente | Asegurar que la PC tiene >8 GB libres |
-| El navegador carga pero no responde | Modelo todavía cargando | Esperar ~90s, revisar `docker logs` |
+| El navegador carga pero no responde | Modelos todavía cargando | Esperar ~120s, revisar `docker logs` |
 | `Permission denied` con docker | Usuario no en grupo docker | `sudo usermod -aG docker $USER` + re-login |
 
 ---
