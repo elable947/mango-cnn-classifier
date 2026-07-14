@@ -356,22 +356,27 @@ netsh interface portproxy add v4tov4
   \centering
   \textbf{Entrada:} Imagen de mango Tipo 4 (no exportable)
 
-  \vspace{1em}
-  \texttt{curl -X POST -F "image=@mango.jpg" /predict}
+  \vspace{0.5em}
+  \begin{columns}
+    \column{0.48\textwidth}
+    \begin{beamercolorbox}[wd=\textwidth,center,rounded=true]{block body}
+      \textbf{ResNet50}\\
+      \texttt{"tipo": "Tipo\_4"}\\
+      \texttt{"exportable": false}\\
+      \texttt{"probabilidad": 94.47}
+    \end{beamercolorbox}
+
+    \column{0.48\textwidth}
+    \begin{beamercolorbox}[wd=\textwidth,center,rounded=true]{block body}
+      \textbf{CNN Propia}\\
+      \texttt{"tipo": "Tipo\_4"}\\
+      \texttt{"exportable": false}\\
+      \texttt{"probabilidad": 89.12}
+    \end{beamercolorbox}
+  \end{columns}
 
   \vspace{1em}
-  \begin{beamercolorbox}[wd=0.7\textwidth,center,rounded=true]{block body}
-    \Large\texttt{\{"tipo": "Tipo\_4",}\\
-    \texttt{\ \ "exportable": false,}\\
-    \texttt{\ \ "probabilidad": 94.47\}}
-  \end{beamercolorbox}
-
-  \vspace{1em}
-  \begin{itemize}
-    \item Clasificación correcta: Tipo 4
-    \item Exportable: false (correcto: 40\% no exportable)
-    \item Confianza: 94.47\% (alta certeza)
-  \end{itemize}
+  \footnotesize Ambos modelos coinciden en la clasificación. ResNet50 tiene mayor confianza por el Transfer Learning.
 \end{frame}
 
 % ==================== CIERRE ====================

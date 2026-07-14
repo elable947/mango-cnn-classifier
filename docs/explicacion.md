@@ -118,13 +118,16 @@ Cliente (navegador / curl)
    Flask (0.0.0.0:5000)
        │
        ├── GET  /          → frontend/index.html (HTML)
-       ├── GET  /health    → {"status": "ok", "modelo": "...", "clases": [...]}
-       └── POST /predict   → {"tipo": "...", "exportable": bool, "probabilidad": float}
-                                  │
-                                  ▼
-                         TensorFlow + ResNet50
-                         (modelo cargado UNA vez al iniciar)
+       ├── GET  /health    → {"status": "ok", "modelos_cargados": ["resnet50", "cnn_propia"], ...}
+       ├── GET  /models    → Métricas de ambos modelos (metrics.json)
+       └── POST /predict   → Predicciones de AMBOS modelos:
+              │                {"resnet50": {...}, "cnn_propia": {...}}
+              │
+              ├──▶ TensorFlow + ResNet50 (preprocess_input)
+              └──▶ TensorFlow + CNN Propia (rescale 1/255)
 ```
+
+Ambos modelos se cargan **al iniciar** (~420 MB en RAM). Cada uno usa su propio pipeline de preprocesamiento.
 
 ### Carga del modelo (paso 6.2)
 
@@ -172,11 +175,12 @@ Flujo completo:
 
 ```json
 {
-  "tipo": "Tipo_4",
-  "exportable": false,
-  "probabilidad": 94.47
+  "resnet50": {"tipo": "Tipo_4", "exportable": false, "probabilidad": 94.47},
+  "cnn_propia": {"tipo": "Tipo_4", "exportable": false, "probabilidad": 89.12}
 }
 ```
+
+Ambos modelos predicen sobre la misma imagen. El frontend los muestra lado a lado para comparar.
 
 ### Mapa de exportación
 
@@ -231,9 +235,12 @@ La guía pedía "HTML5 + CSS + JS vanilla (o Angular)". Se eligió vanilla JS si
 |---|---|---|
 | `<input type="file">` | Selector de imagen con filtro `.jpg,.jpeg,.png,.bmp` | 7.2 |
 | `previewImage()` | `FileReader.readAsDataURL()` → `<img>` de previsualización | 7.2 |
-| Botón "Clasificar" | Dispara `clasificar()` | 7.3 |
-| Loader spinner | Bootstrap spinner + texto "Analizando imagen..." (importante: CPU tarda >60s) | Extra |
-| Result card | Badge verde/rojo para exportable + barra de progreso para probabilidad | 7.4 |
+| Botón "Clasificar" | Dispara `clasificar()` — predice con ambos modelos | 7.3 |
+| Loader spinner | Bootstrap spinner + texto (CPU tarda ~2 min con 2 modelos) | Extra |
+| Result cards (×2) | Una por modelo: ResNet50 (🔬) y CNN Propia (🧠), lado a lado | 7.4 |
+| Badge exportable | Verde ✅ / Rojo ❌ según predicción de cada modelo | 7.4 |
+| Barra de confianza | Progress bar coloreada por nivel de certeza (>80% verde) | 7.4 |
+| Panel de métricas | Pestañas con macro F1, accuracy exportable, F1 por tipo | Extra |
 | Alertas de error | Warning amarillo (sin imagen) o danger rojo (error servidor) | 7.5 |
 
 ### Flujo del frontend
