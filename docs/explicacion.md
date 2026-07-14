@@ -260,11 +260,7 @@ Usa ruta relativa. En desarrollo apunta al mismo host (WSL:5000). En producción
 
 ### ¿Por qué Docker?
 
-La guía lo pide como opción de despliegue (alternativa a systemd). Ventajas:
-
-- **Portabilidad**: mismo entorno en desarrollo y producción
-- **Aislamiento**: dependencias no contaminan el sistema host
-- **Reproducibilidad**: cualquier persona con Docker puede levantar la API
+La guía lo pide como opción de despliegue. El `Dockerfile` es el **plano/receta** que define TODO lo que necesita la API: sistema operativo, dependencias, código, modelos, y comando de arranque. Con un solo `docker build`, Docker ejecuta ese plano y construye la imagen automáticamente. No hay que instalar nada manualmente en el servidor.
 
 ### Dockerfile explicado
 
