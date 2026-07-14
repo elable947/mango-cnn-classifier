@@ -11,6 +11,8 @@ wheels/
 
 # Dataset y archivos pesados (compartidos por Drive, no Git)
 data/
+Dataset_mangos/
+dataset.zip
 ejemplo_api/
 
 # Archivos temporales de la API
