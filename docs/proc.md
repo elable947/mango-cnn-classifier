@@ -11,7 +11,6 @@
 # 1. SSH a la PC remota (ya lo tenés en Zed)
 # 2. En WSL:
 cd ~/mango-cnn-classifier
-git pull
 docker rm -f mango-api 2>/dev/null
 docker build -t mango-api .
 docker run -d -p 5000:5000 --name mango-api mango-api
@@ -38,14 +37,7 @@ http://100.82.22.10:5000
 
 Desde Zed en tu laptop ya tenés la conexión SSH configurada a la PC remota. Abrí la terminal de Zed.
 
-### 2. Actualizar el código
-
-```bash
-cd ~/mango-cnn-classifier
-git pull origin main
-```
-
-### 3. Levantar Docker
+### 2. Levantar Docker
 
 ```bash
 # Por si quedó algo corriendo
@@ -58,7 +50,7 @@ docker build -t mango-api .
 docker run -d -p 5000:5000 --name mango-api mango-api
 ```
 
-### 4. Verificar que la API está viva
+### 3. Verificar que la API está viva
 
 Esperá ~90 segundos (TensorFlow carga el modelo ResNet50 de 165 MB en CPU) y luego:
 
@@ -75,7 +67,7 @@ Respuesta esperada:
 {"clases":["Tipo_1","Tipo_2","Tipo_3","Tipo_4","Tipo_5"],"modelo":"resnet50_mango","status":"ok"}
 ```
 
-### 5. Actualizar el portproxy de Windows
+### 4. Actualizar el portproxy de Windows
 
 La IP de WSL2 **cambia cada vez que se reinicia WSL**. El portproxy anterior apunta a una IP vieja.
 
@@ -97,7 +89,7 @@ netsh interface portproxy add v4tov4 listenport=5000 listenaddress=0.0.0.0 conne
 
 > **Nota:** Si no reiniciaste la PC ni WSL desde la última vez, la IP no cambió y podés saltar este paso. Para estar seguro, ejecutalo igual.
 
-### 6. Abrir en tu laptop
+### 5. Abrir en tu laptop
 
 ```
 http://100.82.22.10:5000
