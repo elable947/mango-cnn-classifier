@@ -284,6 +284,32 @@ EXPOSE 5000
 CMD ["gunicorn", ...]             # WSGI server para producción
 ```
 
+### Proceso de construcción de la imagen
+
+El comando `docker build -t mango-api .` ejecuta cada instrucción del Dockerfile en orden, creando **capas** (layers). Cada capa se cachea: si un paso no cambia, Docker reutiliza la capa anterior.
+
+```
+Paso 1/11: FROM python:3.10.4-slim     → Descarga la imagen base (~120 MB)
+Paso 2/11: WORKDIR /app                 → Crea el directorio de trabajo
+Paso 3/11: RUN apt-get install...       → Instala libgl1 (dependencia de Pillow)
+Paso 4/11: COPY requirements.txt        → Copia el archivo de dependencias
+Paso 5/11: RUN pip install...           → Instala Flask, TensorFlow, etc. (~3 GB)
+Paso 6/11: COPY api/app.py              → Copia el código de la API
+Paso 7/11: COPY frontend/               → Copia el frontend
+Paso 8/11: COPY models/                 → Copia los modelos (~420 MB)
+Paso 9/11: EXPOSE 5000                  → Declara el puerto (informativo)
+Paso 10/11: ENV TF_ENABLE_ONEDNN_OPTS=0 → Variable de entorno
+Paso 11/11: CMD ["gunicorn",...]        → Comando de arranque
+```
+
+**Tamaño final de la imagen:** ~4 GB (la mayor parte es TensorFlow + modelos).
+
+**Caché:** Si modificás solo `app.py`, Docker reusa las capas 1-5 y solo reconstruye desde la 6 en adelante, ahorrando ~10 minutos de build.
+
+**`-t mango-api`:** Asigna el tag/nombre a la imagen.
+
+**`.`:** El contexto de build (directorio actual). Docker envía todo el contenido de `.` al daemon (3.7 GB en nuestro caso por los datasets), por eso `.gitignore` y `.dockerignore` son importantes.
+
 ### ¿Por qué gunicorn y no `flask run`?
 
 El servidor de desarrollo de Flask (`app.run()`) **no es para producción**. Gunicorn es un servidor WSGI probado en producción que:
