@@ -301,17 +301,19 @@ TensorFlow y gunicorn tienen problemas conocidos al forkear procesos. Solución 
 |---|---|
 | oneDNN + fork causa crashes | `TF_ENABLE_ONEDNN_OPTS=0` |
 | Worker timeout en carga | `--timeout 600` |
-| Memory leak en múltiples requests | `--max-requests 1` |
 | 2 workers = 2× RAM | `--workers 1` |
 
 ### Comandos Docker principales
 
 ```bash
-docker build -t mango-api .                        # Construir imagen
-docker run -d -p 5000:5000 --name mango-api mango-api  # Iniciar
-docker logs -f mango-api                           # Ver logs
-docker stop mango-api                              # Detener
-docker rm -f mango-api                             # Borrar
+docker build -t mango-api .                            # Construir imagen
+docker run -d -p 5000:5000 --name mango-api mango-api  # Iniciar (crear nuevo)
+docker start mango-api                                 # Iniciar (contenedor existente)
+docker ps                                              # Ver contenedores corriendo
+docker ps -a                                           # Ver todos (incluyendo detenidos)
+docker logs -f mango-api                               # Ver logs en vivo
+docker stop mango-api                                  # Detener
+docker rm -f mango-api                                 # Borrar
 ```
 
 ---

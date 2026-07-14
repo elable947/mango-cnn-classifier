@@ -25,8 +25,11 @@ hostname -I
 netsh interface portproxy reset
 netsh interface portproxy add v4tov4 listenport=5000 listenaddress=0.0.0.0 connectport=5000 connectaddress=<IP_DE_WSL>
 
+# 5. Verificar IP de Tailscale:
+tailscale ip -4
+
 # 6. En tu laptop, abrí:
-http://100.82.22.10:5000
+http://<IP_TAILSCALE>:5000
 ```
 
 ---
@@ -91,11 +94,19 @@ netsh interface portproxy add v4tov4 listenport=5000 listenaddress=0.0.0.0 conne
 
 ### 5. Abrir en tu laptop
 
-```
-http://100.82.22.10:5000
+Verificá la IP de Tailscale (por si cambió):
+
+```bash
+tailscale ip -4
 ```
 
-Deberías ver la página del clasificador de mangos.
+Luego en tu laptop abrí:
+
+```
+http://<IP_TAILSCALE>:5000
+```
+
+Ejemplo: `http://100.82.22.10:5000`
 
 ---
 
@@ -117,7 +128,7 @@ O subila desde el frontend en el navegador.
 | Problema | Causa | Solución |
 |---|---|---|
 | `address already in use` | Puerto 5000 ocupado | `docker rm -f mango-api` y reintentar |
-| `Cannot connect` en el navegador | Portproxy desactualizado | Revisar IP de WSL y actualizar portproxy |
+| `Cannot connect` en el navegador | Portproxy desactualizado o IP de Tailscale cambió | Revisar `tailscale ip -4` y `hostname -I`, actualizar ambos |
 | `WORKER TIMEOUT` en logs | Docker sin RAM suficiente | Asegurar que la PC tiene >8 GB libres |
 | El navegador carga pero no responde | Modelo todavía cargando | Esperar ~90s, revisar `docker logs` |
 | `Permission denied` con docker | Usuario no en grupo docker | `sudo usermod -aG docker $USER` + re-login |

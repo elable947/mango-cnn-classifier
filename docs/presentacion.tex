@@ -188,7 +188,6 @@ ENV TF_ENABLE_ONEDNN_OPTS=0
 EXPOSE 5000
 CMD ["gunicorn", "--bind", "0.0.0.0:5000",
      "--workers", "1", "--timeout", "600",
-     "--max-requests", "1",
      "api.app:app"]
   \end{lstlisting}
 \end{frame}
@@ -223,7 +222,6 @@ CMD ["gunicorn", "--bind", "0.0.0.0:5000",
     \hline
     oneDNN + fork & \texttt{TF\_ENABLE\_ONEDNN\_OPTS=0} \\
     Worker timeout & \texttt{--timeout 600} \\
-    Memory leak & \texttt{--max-requests 1} \\
     RAM × workers & \texttt{--workers 1} \\
     \hline
   \end{tabular}
@@ -236,10 +234,11 @@ CMD ["gunicorn", "--bind", "0.0.0.0:5000",
     \textbf{Acción} & \textbf{Comando} \\
     \hline
     Build & \texttt{docker build -t mango-api .} \\
-    Iniciar & \texttt{docker run -d -p 5000:5000 --name mango-api mango-api} \\
+    Iniciar (nuevo) & \texttt{docker run -d -p 5000:5000 --name mango-api mango-api} \\
+    Iniciar (existente) & \texttt{docker start mango-api} \\
+    Ver corriendo & \texttt{docker ps} \\
     Logs & \texttt{docker logs -f mango-api} \\
     Detener & \texttt{docker stop mango-api} \\
-    Reiniciar & \texttt{docker restart mango-api} \\
     Borrar & \texttt{docker rm -f mango-api} \\
     \hline
   \end{tabular}
