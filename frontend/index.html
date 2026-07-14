@@ -6,116 +6,228 @@
   <title>Clasificador de Mangos</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/css/bootstrap.min.css" rel="stylesheet">
   <style>
-    body { background: #f5f5f5; }
-    .card { border-radius: 12px; }
-    .preview-img { max-width: 300px; max-height: 300px; border-radius: 8px; border: 2px solid #ddd; }
-    .exportable-badge { font-size: 1.2rem; }
+    :root {
+      --mango: #f48120;
+      --mango-light: #fff3e6;
+      --green: #28a745;
+      --red: #dc3545;
+    }
+    body { background: linear-gradient(135deg, #f5f7fa 0%, #e8ecf1 100%); min-height: 100vh; }
+    .navbar-brand { font-weight: 700; }
+    .hero { background: linear-gradient(135deg, var(--mango) 0%, #e67300 100%); color: white; border-radius: 16px; }
+    .card { border: none; border-radius: 14px; box-shadow: 0 2px 12px rgba(0,0,0,0.06); transition: transform 0.2s; }
+    .card:hover { transform: translateY(-2px); }
+    .preview-img { max-width: 260px; max-height: 260px; border-radius: 12px; border: 3px solid #eee; object-fit: cover; }
+    .model-card { border-left: 4px solid var(--mango); }
+    .model-card.cnn { border-left-color: #6f42c1; }
     .loader { display: none; }
+    .badge-exportable { font-size: 1rem; padding: 6px 14px; }
+    .metric-row { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid #f0f0f0; }
+    .metric-row:last-child { border-bottom: none; }
+    .metric-value { font-weight: 600; }
+    .tabs .nav-link { border-radius: 8px 8px 0 0; padding: 10px 20px; }
+    .tabs .nav-link.active { background: white; border-bottom: 3px solid var(--mango); font-weight: 600; }
   </style>
 </head>
 <body>
-  <div class="container py-4">
-    <div class="text-center mb-4">
-      <h1 class="display-5">🥭 Clasificador de Mangos</h1>
-      <p class="text-muted">Subí una foto para identificar el tipo y si es exportable</p>
-    </div>
 
-    <div class="row justify-content-center">
-      <div class="col-md-6">
-        <!-- Upload Card -->
-        <div class="card shadow-sm mb-4">
-          <div class="card-body text-center">
-            <h5 class="card-title">📤 Cargar imagen</h5>
-            <input type="file" id="imageUpload" accept=".jpg,.jpeg,.png,.bmp" class="form-control-file mb-3" onchange="previewImage()">
-            <div id="imagePreview" class="mb-3"></div>
-            <button class="btn btn-success btn-lg btn-block" onclick="clasificar()" id="btnClasificar">
-              🔍 Clasificar
-            </button>
-            <div class="loader text-center mt-3" id="loader">
-              <div class="spinner-border text-success" role="status"></div>
-              <p class="text-muted mt-2">Analizando imagen... (puede tardar unos segundos)</p>
-            </div>
+<nav class="navbar navbar-light bg-white shadow-sm mb-4">
+  <div class="container">
+    <span class="navbar-brand">🥭 Mango Classifier</span>
+    <span class="text-muted small">ResNet50 + CNN Propia</span>
+  </div>
+</nav>
+
+<div class="container">
+  <!-- Hero -->
+  <div class="hero text-center p-4 mb-4">
+    <h2 class="mb-1">Clasificador de Mangos con CNN</h2>
+    <p class="mb-0 opacity-75">Compará predicciones de ambos modelos en tiempo real</p>
+  </div>
+
+  <div class="row">
+    <!-- Columna izquierda: Upload -->
+    <div class="col-lg-5 mb-4">
+      <div class="card">
+        <div class="card-body text-center">
+          <h5 class="card-title mb-3">📤 Subí una imagen de mango</h5>
+          <input type="file" id="imageUpload" accept=".jpg,.jpeg,.png,.bmp"
+                 class="form-control-file mb-3" onchange="previewImage()">
+          <div id="imagePreview" class="mb-3"></div>
+          <button class="btn btn-warning btn-lg btn-block font-weight-bold" onclick="clasificar()" id="btnClasificar"
+                  style="background: var(--mango); border-color: var(--mango); color: white;">
+            🔍 Clasificar
+          </button>
+          <div class="loader text-center mt-3" id="loader">
+            <div class="spinner-border" style="color: var(--mango);" role="status"></div>
+            <p class="text-muted mt-2 small">Analizando con ambos modelos (~2 min en CPU)...</p>
           </div>
         </div>
+      </div>
 
-        <!-- Result Card -->
-        <div class="card shadow-sm" id="resultCard" style="display:none;">
-          <div class="card-body text-center" id="resultBody"></div>
+      <!-- Métricas -->
+      <div class="card mt-3" id="metricsCard" style="display:none;">
+        <div class="card-body">
+          <h6 class="mb-3">📊 Métricas de los modelos</h6>
+          <ul class="nav nav-tabs tabs mb-3" id="metricsTabs">
+            <li class="nav-item"><a class="nav-link active" data-toggle="tab" href="#metricsResnet">ResNet50</a></li>
+            <li class="nav-item"><a class="nav-link" data-toggle="tab" href="#metricsCnn">CNN Propia</a></li>
+          </ul>
+          <div class="tab-content" id="metricsContent"></div>
         </div>
       </div>
     </div>
+
+    <!-- Columna derecha: Resultados -->
+    <div class="col-lg-7">
+      <div id="resultsRow" class="row" style="display:none;">
+        <div class="col-md-6 mb-3" id="resultResnet"></div>
+        <div class="col-md-6 mb-3" id="resultCnn"></div>
+      </div>
+      <div id="errorCard" style="display:none;"></div>
+    </div>
   </div>
+</div>
 
-  <script>
-  function previewImage() {
-    const input = document.getElementById('imageUpload');
-    const preview = document.getElementById('imagePreview');
-    if (!input.files.length) { preview.innerHTML = ''; return; }
-    const reader = new FileReader();
-    reader.onload = e => {
-      preview.innerHTML = `<img src="${e.target.result}" class="preview-img" alt="Preview">`;
-    };
-    reader.readAsDataURL(input.files[0]);
-    document.getElementById('resultCard').style.display = 'none';
-  }
+<script src="https://code.jquery.com/jquery-3.6.0.slim.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/js/bootstrap.bundle.min.js"></script>
 
-  function clasificar() {
-    const input = document.getElementById('imageUpload');
-    const resultCard = document.getElementById('resultCard');
-    const resultBody = document.getElementById('resultBody');
-    const loader = document.getElementById('loader');
-    const btn = document.getElementById('btnClasificar');
+<script>
+let modelMetrics = null;
 
-    // Validar que haya imagen
-    if (!input.files.length) {
-      resultCard.style.display = 'block';
-      resultBody.innerHTML = '<div class="alert alert-warning">⚠️ Seleccioná una imagen primero</div>';
-      return;
+// Cargar métricas al iniciar
+fetch('/models')
+  .then(r => r.json())
+  .then(data => {
+    modelMetrics = data.metrics;
+    document.getElementById('metricsCard').style.display = 'block';
+    renderMetrics();
+  });
+
+function previewImage() {
+  const input = document.getElementById('imageUpload');
+  const preview = document.getElementById('imagePreview');
+  if (!input.files.length) { preview.innerHTML = ''; return; }
+  const reader = new FileReader();
+  reader.onload = e => {
+    preview.innerHTML = `<img src="${e.target.result}" class="preview-img" alt="Preview">`;
+  };
+  reader.readAsDataURL(input.files[0]);
+  document.getElementById('resultsRow').style.display = 'none';
+  document.getElementById('errorCard').style.display = 'none';
+}
+
+function renderMetrics() {
+  if (!modelMetrics) return;
+  const m = modelMetrics.metrics_by_type;
+  const e = modelMetrics.metrics_exportable;
+  const c = modelMetrics.avg_confidence;
+
+  const macroHtml = `
+    <div class="mb-2"><strong>Macro (promedio):</strong></div>
+    <div class="metric-row"><span>Precision</span><span class="metric-value">${(m.macro_precision*100).toFixed(1)}%</span></div>
+    <div class="metric-row"><span>Recall</span><span class="metric-value">${(m.macro_recall*100).toFixed(1)}%</span></div>
+    <div class="metric-row"><span>F1-Score</span><span class="metric-value">${(m.macro_f1*100).toFixed(1)}%</span></div>
+    <div class="mt-2"><strong>Exportable:</strong></div>
+    <div class="metric-row"><span>Accuracy</span><span class="metric-value">${(e.accuracy*100).toFixed(1)}%</span></div>
+    <div class="metric-row"><span>F1-Score</span><span class="metric-value">${(e.f1_score*100).toFixed(1)}%</span></div>
+  `;
+
+  // Por tipo
+  let tipoHtml = '<div class="mt-2"><strong>Por tipo:</strong></div>';
+  ['Tipo_1','Tipo_2','Tipo_3','Tipo_4','Tipo_5'].forEach(t => {
+    if (m[t]) {
+      tipoHtml += `
+        <div class="metric-row"><span>${t}</span>
+          <span class="metric-value">F1: ${(m[t].f1_score*100).toFixed(1)}%</span>
+        </div>`;
     }
+  });
 
-    // Mostrar loader
-    loader.style.display = 'block';
-    btn.disabled = true;
-    resultCard.style.display = 'none';
+  let confHtml = '<div class="mt-2"><strong>Confianza promedio:</strong></div>';
+  ['Tipo_1','Tipo_2','Tipo_3','Tipo_4','Tipo_5'].forEach(t => {
+    if (c[t]) {
+      confHtml += `<div class="metric-row"><span>${t}</span><span class="metric-value">${(c[t]*100).toFixed(1)}%</span></div>`;
+    }
+  });
 
-    const formData = new FormData();
-    formData.append('image', input.files[0]);
+  document.getElementById('metricsContent').innerHTML = `
+    <div class="tab-pane fade show active" id="metricsResnet">
+      <small class="text-muted">Mejor modelo (ResNet50 Transfer Learning)</small>
+      ${macroHtml} ${tipoHtml} ${confHtml}
+    </div>
+  `;
+}
 
-    fetch('/predict', { method: 'POST', body: formData })
-      .then(res => {
-        if (!res.ok) {
-          return res.json().then(err => { throw new Error(err.error || `Error ${res.status}`); });
-        }
-        return res.json();
-      })
-      .then(data => {
-        const exportableIcon = data.exportable ? '✅ Exportable' : '❌ No exportable';
-        const exportableColor = data.exportable ? 'success' : 'danger';
-        const probColor = data.probabilidad > 80 ? 'success' : data.probabilidad > 60 ? 'warning' : 'danger';
+function renderResultCard(modelName, displayName, data, icon) {
+  const exportableIcon = data.exportable ? '✅ Exportable' : '❌ No exportable';
+  const exportableColor = data.exportable ? 'success' : 'danger';
+  const prob = data.probabilidad;
+  const probColor = prob > 80 ? 'success' : prob > 60 ? 'warning' : 'danger';
+  const borderClass = modelName === 'resnet50' ? 'model-card' : 'model-card cnn';
 
-        resultBody.innerHTML = `
-          <h4 class="mb-3">${data.tipo}</h4>
-          <h5><span class="badge badge-${exportableColor} exportable-badge">${exportableIcon}</span></h5>
-          <div class="mt-3">
-            <p class="mb-1"><strong>Confianza:</strong></p>
-            <div class="progress" style="height: 25px;">
-              <div class="progress-bar progress-bar-striped bg-${probColor}" style="width: ${data.probabilidad}%">
-                ${data.probabilidad}%
-              </div>
+  return `
+    <div class="card ${borderClass} h-100">
+      <div class="card-body text-center">
+        <h6 class="text-muted mb-2">${icon} ${displayName}</h6>
+        <h4 class="mb-2">${data.tipo}</h4>
+        <span class="badge badge-${exportableColor} badge-exportable mb-2">${exportableIcon}</span>
+        <div class="mt-2">
+          <small class="text-muted">Confianza</small>
+          <div class="progress" style="height: 22px;">
+            <div class="progress-bar progress-bar-striped bg-${probColor}"
+                 style="width: ${prob}%; font-weight: 600;">
+              ${prob}%
             </div>
           </div>
-        `;
-        resultCard.style.display = 'block';
-      })
-      .catch(err => {
-        resultCard.style.display = 'block';
-        resultBody.innerHTML = `<div class="alert alert-danger">❌ ${err.message}</div>`;
-      })
-      .finally(() => {
-        loader.style.display = 'none';
-        btn.disabled = false;
-      });
+        </div>
+      </div>
+    </div>`;
+}
+
+function clasificar() {
+  const input = document.getElementById('imageUpload');
+  const loader = document.getElementById('loader');
+  const btn = document.getElementById('btnClasificar');
+  const resultsRow = document.getElementById('resultsRow');
+  const errorCard = document.getElementById('errorCard');
+
+  if (!input.files.length) {
+    errorCard.style.display = 'block';
+    errorCard.innerHTML = '<div class="alert alert-warning">⚠️ Seleccioná una imagen primero</div>';
+    resultsRow.style.display = 'none';
+    return;
   }
-  </script>
+
+  loader.style.display = 'block';
+  btn.disabled = true;
+  resultsRow.style.display = 'none';
+  errorCard.style.display = 'none';
+
+  const formData = new FormData();
+  formData.append('image', input.files[0]);
+
+  fetch('/predict', { method: 'POST', body: formData })
+    .then(res => {
+      if (!res.ok) return res.json().then(err => { throw new Error(err.error || `Error ${res.status}`); });
+      return res.json();
+    })
+    .then(data => {
+      document.getElementById('resultResnet').innerHTML =
+        renderResultCard('resnet50', 'ResNet50 (Transfer Learning)', data.resnet50, '🔬');
+      document.getElementById('resultCnn').innerHTML =
+        renderResultCard('cnn_propia', 'CNN Propia', data.cnn_propia, '🧠');
+      resultsRow.style.display = 'flex';
+    })
+    .catch(err => {
+      errorCard.style.display = 'block';
+      errorCard.innerHTML = `<div class="alert alert-danger">❌ ${err.message}</div>`;
+    })
+    .finally(() => {
+      loader.style.display = 'none';
+      btn.disabled = false;
+    });
+}
+</script>
 </body>
 </html>
