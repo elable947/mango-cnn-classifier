@@ -32,7 +32,82 @@ Sin esto, `http://100.82.22.10:5000` (IP de Tailscale) no llega a Flask porque W
 
 ---
 
-## 2. Backend — `api/app.py` (Fase 6)
+## 2. Comunicación Frontend ↔ Backend
+
+### Flujo completo de una predicción
+
+```
+┌──────────────┐     HTTP POST /predict      ┌──────────────┐
+│  Navegador   │ ──────────────────────────> │  Flask API   │
+│  (frontend)  │                              │  (backend)   │
+│              │ <──────────────────────────  │              │
+│ index.html   │     JSON response            │  app.py      │
+└──────────────┘                              └──────┬───────┘
+                                                     │
+                                            model.predict()
+                                                     │
+                                              ┌──────▼───────┐
+                                              │  TensorFlow  │
+                                              │  ResNet50    │
+                                              │  (165 MB)    │
+                                              └──────────────┘
+```
+
+### Paso a paso
+
+1. **Usuario** selecciona una imagen en `index.html` (input type="file")
+2. **Frontend** muestra preview con `FileReader.readAsDataURL()`
+3. **Usuario** hace click en "Clasificar"
+4. **Frontend** crea `FormData` y envía la imagen vía `fetch("/predict", {method: "POST", body: formData})`
+5. **Flask** recibe la request en `request.files["image"]` — es un objeto `FileStorage`
+6. **Flask** preprocesa: `Image.open(file).resize(224,224)` → `preprocess_input()` → `expand_dims()`
+7. **Flask** llama a `model.predict(img_array)` — TensorFlow ejecuta la inferencia
+8. **Flask** procesa el resultado: `argmax` para el tipo, `max*100` para probabilidad, lookup en `EXPORTABLE_MAP`
+9. **Flask** devuelve JSON: `{"tipo": "Tipo_4", "exportable": false, "probabilidad": 94.47}`
+10. **Frontend** recibe el JSON, renderiza la card con badge exportable y barra de progreso
+
+### ¿Por qué `fetch("/predict")` y no `fetch("http://IP:5000/predict")`?
+
+Usamos **ruta relativa**. Cuando el navegador carga `index.html` desde `http://100.82.22.10:5000/`, la ruta `/predict` se resuelve automáticamente como `http://100.82.22.10:5000/predict`. Esto funciona tanto en:
+
+| Entorno | URL base | `/predict` se resuelve a |
+|---|---|---|
+| Desarrollo (Flask directo) | `http://172.29.130.59:5000` | `http://172.29.130.59:5000/predict` |
+| Tailscale + portproxy | `http://100.82.22.10:5000` | `http://100.82.22.10:5000/predict` |
+| Docker | `http://localhost:5000` | `http://localhost:5000/predict` |
+| Producción con nginx | `https://midominio.com` | `https://midominio.com/predict` |
+
+No se hardcodea ninguna IP. El profesor lo pide así en la guía (ver nota 5 de la referencia COVID).
+
+### ¿Cómo sirve Flask el frontend?
+
+```python
+FRONTEND_DIR = os.path.join(os.path.dirname(__file__), "..", "frontend")
+app = Flask(__name__, static_folder=FRONTEND_DIR, static_url_path="")
+
+@app.route("/")
+def index():
+    return send_from_directory(FRONTEND_DIR, "index.html")
+```
+
+Flask configura `static_folder` apuntando a `frontend/`. Cuando el navegador pide `GET /`, Flask devuelve `index.html`. Los assets estáticos (CSS, JS, imágenes) también se sirven desde ahí. Esto cumple el paso **7.6** de la guía: *"Hacer que Flask sirva el frontend"*.
+
+### Comunicación en Docker
+
+Dentro del contenedor, la estructura es:
+
+```
+/app/
+  api/app.py         ← Flask (puerto 5000)
+  frontend/index.html ← Servido por Flask
+  models/*.keras     ← Modelos
+```
+
+El `Dockerfile` copia `frontend/` junto con `api/` y `models/`. Gunicorn ejecuta `api.app:app`, que a su vez sirve el frontend. El puerto 5000 del contenedor se mapea al puerto 5000 del host con `-p 5000:5000`.
+
+---
+
+## 3. Backend — `api/app.py` (Fase 6)
 
 ### Arquitectura general
 
@@ -137,7 +212,7 @@ Sirve el frontend. Flask configura `static_folder` a `../frontend` y devuelve `i
 
 ---
 
-## 3. Frontend — `frontend/index.html` (Fase 7)
+## 4. Frontend — `frontend/index.html` (Fase 7)
 
 ### Tecnologías
 
@@ -181,7 +256,7 @@ Usa ruta relativa. En desarrollo apunta al mismo host (WSL:5000). En producción
 
 ---
 
-## 4. Docker (Fase 6.10–6.11)
+## 5. Docker (Fase 6.10–6.11)
 
 ### ¿Por qué Docker?
 
@@ -241,7 +316,7 @@ docker rm -f mango-api                             # Borrar
 
 ---
 
-## 5. Pruebas realizadas (Fase 7.7–7.9)
+## 6. Pruebas realizadas (Fase 7.7–7.9)
 
 ### Pruebas funcionales (7.7)
 
@@ -269,7 +344,7 @@ Flujo completo verificado: Frontend → API → Modelo → Respuesta:
 
 ---
 
-## 6. Resumen de archivos del entregable
+## 7. Resumen de archivos del entregable
 
 | Archivo | Fase | Descripción |
 |---|---|---|
